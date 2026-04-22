@@ -96,6 +96,37 @@ app.get('/api/announcements', (req, res) => {
     });
 });
 
+// --- 5. API สำหรับ Profile (ดึงข้อมูลรายบุคคล) ---
+app.get('/api/profile/:empId', (req, res) => {
+    const empId = req.params.empId;
+    const sql = "SELECT * FROM Users WHERE EmpID = ?";
+    db.get(sql, [empId], (err, row) => {
+        if (err) return res.status(500).json({ success: false, message: err.message });
+        res.json({ success: true, user: row });
+    });
+});
+
+// --- 6. API สำหรับ Global Dashboard (สรุปภาพรวม) ---
+app.get('/api/global-stats', (req, res) => {
+    // ใช้ SQL คำนวณค่าเฉลี่ยและยอดรวมจากตาราง Users และ Achievements
+    const sql = `
+        SELECT 
+            (SELECT COUNT(*) FROM Users) as totalStaff,
+            (SELECT SUM(Score) FROM Achievements) as totalScore
+    `;
+    db.get(sql, [], (err, row) => {
+        if (err) return res.status(500).json({ success: false, message: err.message });
+        const avg = row.totalStaff > 0 ? (row.totalScore / row.totalStaff).toFixed(2) : 0;
+        res.json({ 
+            success: true, 
+            totalStaff: row.totalStaff || 0, 
+            totalScore: (row.totalScore || 0).toLocaleString(), 
+            avgScore: avg 
+        });
+    });
+});
+
+
 app.listen(PORT, () => {
     console.log(`
     =============================================
