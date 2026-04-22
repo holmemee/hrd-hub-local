@@ -126,6 +126,35 @@ app.get('/api/global-stats', (req, res) => {
     });
 });
 
+// --- 7. API อัปเดตข้อมูลส่วนตัว (Edit Profile) ---
+app.post('/api/update-profile', (req, res) => {
+    const { empId, fullName, shortDept, fullDept, level, fullPosition } = req.body;
+    const sql = "UPDATE Users SET FullName = ?, ShortDept = ?, FullDept = ?, Level = ?, FullPosition = ? WHERE EmpID = ?";
+    db.run(sql, [fullName, shortDept, fullDept, level, fullPosition, empId], function(err) {
+        if (err) return res.status(500).json({ success: false, message: err.message });
+        res.json({ success: true, message: "อัปเดตข้อมูลสำเร็จ!" });
+    });
+});
+
+// --- 8. API เปลี่ยนรหัสผ่าน (Change Password) ---
+app.post('/api/update-password', (req, res) => {
+    const { empId, newPassword } = req.body;
+    const sql = "UPDATE Users SET Password = ? WHERE EmpID = ?";
+    db.run(sql, [newPassword, empId], function(err) {
+        if (err) return res.status(500).json({ success: false, message: err.message });
+        res.json({ success: true, message: "เปลี่ยนรหัสผ่านเรียบร้อยแล้ว!" });
+    });
+});
+
+// --- 9. API อัปโหลดรูปโปรไฟล์ (Upload Profile Pic) ---
+app.post('/api/upload-profile-pic', (req, res) => {
+    const { empId, base64Image } = req.body;
+    const sql = "UPDATE Users SET ProfilePic = ? WHERE EmpID = ?";
+    db.run(sql, [base64Image, empId], function(err) {
+        if (err) return res.status(500).json({ success: false, message: err.message });
+        res.json({ success: true, message: "เปลี่ยนรูปโปรไฟล์สำเร็จ!" });
+    });
+});
 
 app.listen(PORT, () => {
     console.log(`
