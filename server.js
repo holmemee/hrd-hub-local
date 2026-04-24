@@ -128,43 +128,72 @@ app.post('/api/update-password', (req, res) => {
     });
 });
 
-
+// --- API อัปโหลดรูปโปรไฟล์ (เวอร์ชันตรวจจับ Error ละเอียด) ---
 app.post('/api/upload-profile-pic', (req, res) => {
-    const { empId, base64Image } = req.body;
+    console.log("=========================================");
+    console.log("📥 เริ่มกระบวนการอัปโหลดรูปภาพ...");
     
+    const { empId, base64Image } = req.body;
+
+    if (!base64Image) {
+        console.log("❌ พังจุดที่ 1: หน้าเว็บไม่ได้ส่งข้อมูลรูปมาให้");
+        return res.status(400).json({ success: false, message: "ไม่มีข้อมูลรูปภาพส่งมา" });
+    }
+
     try {
-        // 1. ตรวจสอบว่าส่งข้อมูลมาจริงไหม
-        if (!base64Image || !base64Image.includes(';base64,')) {
-            return res.status(400).json({ success: false, message: "รูปแบบไฟล์ไม่ถูกต้อง" });
+        // 1. เช็คและสร้างโฟลเดอร์แบบ Real-time (ใช้ process.cwd() ชัวร์กว่า __dirname)
+        const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+        if (!fs.existsSync(uploadDir)) {
+            console.log("📁 ไม่พบโฟลเดอร์ uploads กำลังสร้างใหม่...");
+            fs.mkdirSync(uploadDir, { recursive: true });
         }
 
-        // 2. แยกส่วนข้อมูลภาพ
-        const parts = base64Image.split(';base64,');
-        const mimeType = parts[0].split(':')[1];
-        const imageData = Buffer.from(parts[1], 'base64');
-        
-        // 3. กำหนดนามสกุลไฟล์
-        const extension = mimeType.split('/')[1] === 'jpeg' ? 'jpg' : mimeType.split('/')[1];
+        // 2. แยกข้อมูล Base64
+        const matches = base64Image.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        if (!matches || matches.length !== 3) {
+             console.log("❌ พังจุดที่ 2: ข้อมูลที่ส่งมาไม่ใช่ Base64 ที่อ่านได้");
+             return res.status(400).json({ success: false, message: "ข้อมูลรูปภาพผิดรูปแบบ" });
+        }
+
+        const mimeType = matches[1];
+        const imageData = Buffer.from(matches[2], 'base64');
+        let extension = mimeType.split('/')[1] || 'jpg';
+        if (extension === 'jpeg') extension = 'jpg';
+
+        // 3. กำหนดชื่อและเส้นทาง
         const fileName = `profile_${empId}_${Date.now()}.${extension}`;
-        
-        // 4. ใช้ path.resolve เพื่อความชัวร์เรื่องตำแหน่งโฟลเดอร์
-        const filePath = path.resolve(__dirname, 'public', 'uploads', fileName);
+        const filePath = path.join(uploadDir, fileName);
         const fileUrl = `/uploads/${fileName}`;
 
+        console.log(`💾 พยายามบันทึกไฟล์ไปที่: ${filePath}`);
+
+        // 4. บันทึกไฟล์ลงเครื่อง
         fs.writeFile(filePath, imageData, (err) => {
             if (err) {
-                console.error("❌ FS Error:", err);
-                return res.status(500).json({ success: false, message: "เขียนไฟล์ไม่สำเร็จ" });
+                console.error("❌ พังจุดที่ 3: คอมพิวเตอร์ไม่ยอมให้เขียนไฟล์!", err);
+                return res.status(500).json({ success: false, message: `เขียนไฟล์ไม่สำเร็จ: ${err.message}` });
             }
 
+            console.log(`✅ เขียนไฟล์สำเร็จ! รูปเข้าไปอยู่ในโฟลเดอร์แล้ว`);
+            console.log(`🔄 กำลังอัปเดต Database ให้จำ URL: ${fileUrl}`);
+
+            // 5. บันทึกลง Database
             const sql = "UPDATE Users SET ProfilePic = ? WHERE EmpID = ?";
             db.run(sql, [fileUrl, empId], function(dbErr) {
-                if (dbErr) return res.status(500).json({ success: false, message: dbErr.message });
-                res.json({ success: true, message: "บันทึกเรียบร้อย!", imageUrl: fileUrl });
+                if (dbErr) {
+                    console.error("❌ พังจุดที่ 4: อัปเดต Database ไม่สำเร็จ!", dbErr);
+                    return res.status(500).json({ success: false, message: `อัปเดต DB ไม่สำเร็จ: ${dbErr.message}` });
+                }
+                
+                console.log(`🎉 สำเร็จทุกขั้นตอน!`);
+                console.log("=========================================");
+                res.json({ success: true, message: "อัปโหลดรูปสำเร็จ!", imageUrl: fileUrl });
             });
         });
-    } catch (e) {
-        res.status(500).json({ success: false, message: e.message });
+
+    } catch (error) {
+        console.error("❌ พังจุดที่ 5: เกิด Error ร้ายแรงในระบบ:", error);
+        res.status(500).json({ success: false, message: `Server Error: ${error.message}` });
     }
 });
 
