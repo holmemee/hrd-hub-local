@@ -13,6 +13,15 @@ app.use(express.static('public'));
 // เชื่อมต่อฐานข้อมูล
 const db = new sqlite3.Database('./database.sqlite');
 
+const fs = require('fs');
+const path = require('path');
+
+// สร้างโฟลเดอร์เก็บรูปอัตโนมัติ (ถ้ายังไม่มี)
+const uploadDir = path.join(__dirname, 'public', 'uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
+
 // --- 1. หน้าแรกทดสอบ ---
 app.get('/', (req, res) => {
     res.send('<h1 style="color: #4a148c; text-align: center; margin-top: 50px;">🚀 HRD HUB Local Server is Online!</h1>');
@@ -147,13 +156,34 @@ app.post('/api/update-password', (req, res) => {
     });
 });
 
-// --- 9. API อัปโหลดรูปโปรไฟล์ (Upload Profile Pic) ---
+// --- 9. API อัปโหลดรูปโปรไฟล์ (บันทึกเป็นไฟล์จริงๆ) ---
 app.post('/api/upload-profile-pic', (req, res) => {
     const { empId, base64Image } = req.body;
-    const sql = "UPDATE Users SET ProfilePic = ? WHERE EmpID = ?";
-    db.run(sql, [base64Image, empId], function(err) {
-        if (err) return res.status(500).json({ success: false, message: err.message });
-        res.json({ success: true, message: "เปลี่ยนรูปโปรไฟล์สำเร็จ!" });
+
+    // 1. แยกส่วนหัวของ Base64 ออก (เช่น "data:image/png;base64,...")
+    const matches = base64Image.match(/^data:image\/([A-Za-z-+\/]+);base64,(.+)$/);
+    if (!matches || matches.length !== 3) {
+        return res.status(400).json({ success: false, message: "ไฟล์รูปภาพไม่ถูกต้อง" });
+    }
+
+    const extension = matches[1] === 'jpeg' ? 'jpg' : matches[1];
+    const imageData = Buffer.from(matches[2], 'base64');
+    
+    // 2. ตั้งชื่อไฟล์ใหม่ (ใส่ Date.now() ป้องกันเบราว์เซอร์จำรูปเก่า)
+    const fileName = `profile_${empId}_${Date.now()}.${extension}`;
+    const filePath = path.join(uploadDir, fileName);
+    const fileUrl = `/uploads/${fileName}`; // เส้นทางที่จะส่งให้หน้าเว็บ
+
+    // 3. เขียนไฟล์ลงโฟลเดอร์ public/uploads/
+    fs.writeFile(filePath, imageData, (err) => {
+        if (err) return res.status(500).json({ success: false, message: "บันทึกไฟล์ล้มเหลว" });
+
+        // 4. เอาเส้นทางไฟล์ (URL) ไปเซฟลง Database แทน Base64 ยาวๆ
+        const sql = "UPDATE Users SET ProfilePic = ? WHERE EmpID = ?";
+        db.run(sql, [fileUrl, empId], function(dbErr) {
+            if (dbErr) return res.status(500).json({ success: false, message: dbErr.message });
+            res.json({ success: true, message: "เปลี่ยนรูปโปรไฟล์สำเร็จ!", imageUrl: fileUrl });
+        });
     });
 });
 
