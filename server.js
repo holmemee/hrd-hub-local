@@ -11,15 +11,17 @@ const PORT = 3000;
 // ⚙️ Middleware Setup
 // ==========================================
 app.use(cors()); 
-// สำคัญ: ขยายท่อรับข้อมูลเป็น 50MB เพื่อรองรับ Base64 จากหน้าบ้าน
 app.use(express.json({ limit: '50mb' })); 
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use(express.static('public'));
 
-// เชื่อมต่อฐานข้อมูล
-const db = new sqlite3.Database('./database.sqlite');
+// 🔴 ล็อคพิกัดที่ 1: บังคับให้ระบบรู้จักโฟลเดอร์ public อย่างแม่นยำ
+app.use(express.static(path.join(__dirname, 'public')));
 
-// สร้างโฟลเดอร์เก็บรูปอัตโนมัติ (ถ้ายังไม่มี)
+// 🔴 ล็อคพิกัดที่ 2: บังคับให้ฐานข้อมูลอยู่ที่เดียวกับไฟล์ server.js
+const dbPath = path.join(__dirname, 'database.sqlite');
+const db = new sqlite3.Database(dbPath);
+
+// 🔴 ล็อคพิกัดที่ 3: สร้างโฟลเดอร์รูปภาพในโปรเจกต์เท่านั้น
 const uploadDir = path.join(__dirname, 'public', 'uploads');
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
@@ -29,12 +31,10 @@ if (!fs.existsSync(uploadDir)) {
 // 🚀 API Endpoints
 // ==========================================
 
-// --- 1. หน้าแรกทดสอบ ---
 app.get('/', (req, res) => {
     res.send('<h1 style="color: #4a148c; text-align: center; margin-top: 50px;">🚀 HRD HUB Local Server is Online!</h1>');
 });
 
-// --- 2. ระบบ Login ---
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
     const sql = "SELECT * FROM Users WHERE EmpID = ? AND Password = ?";
@@ -48,7 +48,6 @@ app.post('/api/login', (req, res) => {
     });
 });
 
-// --- 3. ดึง Config (รางวัล/แผนก) ---
 app.get('/api/config', (req, res) => {
     db.all("SELECT * FROM Config", [], (err, configRows) => {
         if (err) return res.status(500).json({ success: false, message: err.message });
@@ -68,7 +67,6 @@ app.get('/api/config', (req, res) => {
     });
 });
 
-// --- 4. ดึง Catalog 3 อันล่าสุด ---
 app.get('/api/latest-catalog', (req, res) => {
     const sql = "SELECT * FROM Learning_Catalog ORDER BY rowid DESC LIMIT 3";
     db.all(sql, [], (err, rows) => {
@@ -77,7 +75,6 @@ app.get('/api/latest-catalog', (req, res) => {
     });
 });
 
-// --- 5. ดึงประกาศ (Banners & Popups) ---
 app.get('/api/announcements', (req, res) => {
     const sql = "SELECT * FROM Announcements WHERE UPPER(status) = 'TRUE'";
     db.all(sql, [], (err, rows) => {
@@ -98,7 +95,6 @@ app.get('/api/announcements', (req, res) => {
     });
 });
 
-// --- 6. ข้อมูลโปรไฟล์รายบุคคล ---
 app.get('/api/profile/:empId', (req, res) => {
     const empId = req.params.empId;
     const sql = "SELECT * FROM Users WHERE EmpID = ?";
@@ -108,7 +104,6 @@ app.get('/api/profile/:empId', (req, res) => {
     });
 });
 
-// --- 7. แก้ไขข้อมูลส่วนตัว ---
 app.post('/api/update-profile', (req, res) => {
     const { empId, fullName, shortDept, fullDept, level, fullPosition } = req.body;
     const sql = "UPDATE Users SET FullName = ?, ShortDept = ?, FullDept = ?, Level = ?, FullPosition = ? WHERE EmpID = ?";
@@ -118,7 +113,6 @@ app.post('/api/update-profile', (req, res) => {
     });
 });
 
-// --- 8. เปลี่ยนรหัสผ่าน ---
 app.post('/api/update-password', (req, res) => {
     const { empId, newPassword } = req.body;
     const sql = "UPDATE Users SET Password = ? WHERE EmpID = ?";
@@ -128,7 +122,7 @@ app.post('/api/update-password', (req, res) => {
     });
 });
 
-// --- API อัปโหลดรูปโปรไฟล์ (เวอร์ชันตรวจจับ Error ละเอียด) ---
+// --- API อัปโหลดรูปโปรไฟล์ (เวอร์ชันล็อคพิกัดสัมบูรณ์) ---
 app.post('/api/upload-profile-pic', (req, res) => {
     console.log("=========================================");
     console.log("📥 เริ่มกระบวนการอัปโหลดรูปภาพ...");
@@ -136,22 +130,20 @@ app.post('/api/upload-profile-pic', (req, res) => {
     const { empId, base64Image } = req.body;
 
     if (!base64Image) {
-        console.log("❌ พังจุดที่ 1: หน้าเว็บไม่ได้ส่งข้อมูลรูปมาให้");
+        console.log("❌ ไม่มีข้อมูลรูปภาพส่งมา");
         return res.status(400).json({ success: false, message: "ไม่มีข้อมูลรูปภาพส่งมา" });
     }
 
     try {
-        // 1. เช็คและสร้างโฟลเดอร์แบบ Real-time (ใช้ process.cwd() ชัวร์กว่า __dirname)
-        const uploadDir = path.join(process.cwd(), 'public', 'uploads');
-        if (!fs.existsSync(uploadDir)) {
-            console.log("📁 ไม่พบโฟลเดอร์ uploads กำลังสร้างใหม่...");
-            fs.mkdirSync(uploadDir, { recursive: true });
+        // 🔴 ล็อคพิกัดที่ 4: มั่นใจ 100% ว่าเซฟลงในโปรเจกต์นี้เท่านั้น
+        const currentUploadDir = path.join(__dirname, 'public', 'uploads');
+        if (!fs.existsSync(currentUploadDir)) {
+            fs.mkdirSync(currentUploadDir, { recursive: true });
         }
 
-        // 2. แยกข้อมูล Base64
         const matches = base64Image.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
         if (!matches || matches.length !== 3) {
-             console.log("❌ พังจุดที่ 2: ข้อมูลที่ส่งมาไม่ใช่ Base64 ที่อ่านได้");
+             console.log("❌ ข้อมูลที่ส่งมาไม่ใช่ Base64 ที่อ่านได้");
              return res.status(400).json({ success: false, message: "ข้อมูลรูปภาพผิดรูปแบบ" });
         }
 
@@ -160,47 +152,41 @@ app.post('/api/upload-profile-pic', (req, res) => {
         let extension = mimeType.split('/')[1] || 'jpg';
         if (extension === 'jpeg') extension = 'jpg';
 
-        // 3. กำหนดชื่อและเส้นทาง
         const fileName = `profile_${empId}_${Date.now()}.${extension}`;
-        const filePath = path.join(uploadDir, fileName);
+        const filePath = path.join(currentUploadDir, fileName); // เซฟตรงนี้แน่นอน!
         const fileUrl = `/uploads/${fileName}`;
 
         console.log(`💾 พยายามบันทึกไฟล์ไปที่: ${filePath}`);
 
-        // 4. บันทึกไฟล์ลงเครื่อง
         fs.writeFile(filePath, imageData, (err) => {
             if (err) {
-                console.error("❌ พังจุดที่ 3: คอมพิวเตอร์ไม่ยอมให้เขียนไฟล์!", err);
+                console.error("❌ คอมพิวเตอร์ไม่ยอมให้เขียนไฟล์!", err);
                 return res.status(500).json({ success: false, message: `เขียนไฟล์ไม่สำเร็จ: ${err.message}` });
             }
 
-            console.log(`✅ เขียนไฟล์สำเร็จ! รูปเข้าไปอยู่ในโฟลเดอร์แล้ว`);
-            console.log(`🔄 กำลังอัปเดต Database ให้จำ URL: ${fileUrl}`);
+            console.log(`✅ เขียนไฟล์สำเร็จ! รูปเข้าไปอยู่ในโฟลเดอร์ uploads แล้ว`);
 
-            // 5. บันทึกลง Database
             const sql = "UPDATE Users SET ProfilePic = ? WHERE EmpID = ?";
             db.run(sql, [fileUrl, empId], function(dbErr) {
                 if (dbErr) {
-                    console.error("❌ พังจุดที่ 4: อัปเดต Database ไม่สำเร็จ!", dbErr);
+                    console.error("❌ อัปเดต Database ไม่สำเร็จ!", dbErr);
                     return res.status(500).json({ success: false, message: `อัปเดต DB ไม่สำเร็จ: ${dbErr.message}` });
                 }
                 
-                console.log(`🎉 สำเร็จทุกขั้นตอน!`);
+                console.log(`🎉 อัปโหลดสมบูรณ์! URL: ${fileUrl}`);
                 console.log("=========================================");
                 res.json({ success: true, message: "อัปโหลดรูปสำเร็จ!", imageUrl: fileUrl });
             });
         });
 
     } catch (error) {
-        console.error("❌ พังจุดที่ 5: เกิด Error ร้ายแรงในระบบ:", error);
+        console.error("❌ เกิด Error ร้ายแรงในระบบ:", error);
         res.status(500).json({ success: false, message: `Server Error: ${error.message}` });
     }
 });
 
-// --- 10. ค้นหาพนักงาน (Directory Lookup) ---
 app.get('/api/staff-search', (req, res) => {
     const { keyword, dept } = req.query;
-    // ป้องกันการดึง ProfilePic มาโดยไม่จำเป็นเพื่อความเร็ว (ดึงเฉพาะตอนดูโปรไฟล์เต็ม)
     let sql = "SELECT EmpID, FullName, ShortDept, FullDept, Role, ProfilePic FROM Users WHERE (FullName LIKE ? OR EmpID LIKE ?)";
     let params = [`%${keyword}%`, `%${keyword}%`];
 
@@ -215,7 +201,6 @@ app.get('/api/staff-search', (req, res) => {
     });
 });
 
-// --- 11. สถิติ Dashboard (คะแนน/จำนวนคน) ---
 app.get('/api/global-stats', (req, res) => {
     const sql = `
         SELECT 
@@ -234,7 +219,6 @@ app.get('/api/global-stats', (req, res) => {
     });
 });
 
-// --- 12. ติดตามสถานะงานแยกแผนก ---
 app.get('/api/task-tracking-stats', (req, res) => {
     const sql = `
         SELECT 
@@ -252,7 +236,6 @@ app.get('/api/task-tracking-stats', (req, res) => {
     });
 });
 
-// --- 13. ดึงประวัติผลงานรายบุคคล ---
 app.get('/api/staff-achievements/:empId', (req, res) => {
     const empId = req.params.empId;
     const sql = "SELECT * FROM Achievements WHERE Emp_ID = ? ORDER BY Date DESC";
@@ -262,15 +245,11 @@ app.get('/api/staff-achievements/:empId', (req, res) => {
     });
 });
 
-// ==========================================
-// 🏁 Start Server
-// ==========================================
 app.listen(PORT, () => {
     console.log(`
     =============================================
     ✅ HRD HUB Server พร้อมรับออเดอร์แล้ว!
     📍 URL: http://localhost:${PORT}
-    📁 โฟลเดอร์รูปภาพ: public/uploads
     =============================================
     `);
 });
