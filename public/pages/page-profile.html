@@ -1,0 +1,69 @@
+<div class="row justify-content-center">
+  <div class="col-md-8 col-lg-6">
+    <div class="card border-0 shadow-sm p-4" style="border-radius: 20px;">
+      <div class="text-center mb-4">
+        <div class="position-relative d-inline-block">
+          <img id="profilePicBig" src="https://via.placeholder.com/150" class="rounded-circle shadow-sm" style="width:150px; height:150px; object-fit:cover; border: 5px solid #f3e5f5;">
+          <button class="btn btn-purple rounded-circle position-absolute bottom-0 end-0 shadow" style="width:40px; height:40px;" onclick="document.getElementById('profilePicInput').click()">
+            <i class="bi bi-camera-fill text-white"></i>
+          </button>
+          <input type="file" id="profilePicInput" accept="image/*" style="display:none;" onchange="uploadProfilePic(event)">
+        </div>
+        <h3 id="profileName" class="fw-bold text-purple mt-3 mb-1">ชื่อ-นามสกุล</h3>
+        <span class="badge bg-purple px-3 py-2 rounded-pill" id="profileRole">Role</span>
+      </div>
+
+      <div class="bg-light p-3 rounded-3 mb-4">
+        <div class="row g-3">
+          <div class="col-6"><label class="small text-muted mb-1">รหัสพนักงาน</label><h6 id="profileEmpId" class="fw-bold text-dark">-</h6></div>
+          <div class="col-6"><label class="small text-muted mb-1">ระดับ</label><h6 id="profileLevel" class="fw-bold text-dark">-</h6></div>
+          <div class="col-12"><label class="small text-muted mb-1">สังกัดแผนก</label><h6 id="profileDept" class="fw-bold text-dark">-</h6></div>
+          <div class="col-12"><label class="small text-muted mb-1">ตำแหน่ง</label><h6 id="profilePosition" class="fw-bold text-dark">-</h6></div>
+        </div>
+      </div>
+      <div class="d-flex gap-2 mt-4">
+        <button class="btn btn-outline-purple w-100 rounded-pill fw-bold" onclick="openEditProfile()"><i class="bi bi-pencil-square me-1"></i> แก้ไขข้อมูล</button>
+        <button class="btn btn-warning text-dark w-100 rounded-pill fw-bold" onclick="openChangePassword()"><i class="bi bi-key-fill me-1"></i> เปลี่ยนรหัส</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="editProfileModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content border-0 shadow-lg">
+      <div class="modal-header bg-purple text-white border-0">
+        <h5 class="modal-title"><i class="bi bi-person-lines-fill me-2"></i> แก้ไขข้อมูลส่วนตัว</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="editProfileForm" onsubmit="event.preventDefault(); saveProfile();">
+          <div class="mb-2"><label class="small text-muted">ชื่อ-นามสกุล</label><input type="text" id="editFullName" class="form-control" required></div>
+          <div class="mb-2"><label class="small text-muted">ชื่อย่อแผนก</label><input type="text" id="editShortDept" class="form-control" required></div>
+          <div class="mb-2"><label class="small text-muted">ชื่อเต็มแผนก</label><input type="text" id="editFullDept" class="form-control" required></div>
+          <div class="mb-2"><label class="small text-muted">ระดับ</label><input type="text" id="editLevel" class="form-control"></div>
+          <div class="mb-3"><label class="small text-muted">ตำแหน่งเต็ม</label><input type="text" id="editPosition" class="form-control"></div>
+          <button type="submit" class="btn btn-purple w-100" id="btnSaveProfile">บันทึกการเปลี่ยนแปลง</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="changePasswordModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content border-0 shadow-lg">
+      <div class="modal-header bg-warning border-0">
+        <h5 class="modal-title text-dark"><i class="bi bi-shield-lock-fill me-2"></i> เปลี่ยนรหัสผ่าน</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="changePasswordForm" onsubmit="event.preventDefault(); savePassword();">
+          <div class="mb-2"><input type="password" id="newPassword" class="form-control" placeholder="รหัสผ่านใหม่" required></div>
+          <div class="mb-3"><input type="password" id="confirmPassword" class="form-control" placeholder="ยืนยันรหัสผ่านใหม่" required></div>
+          <button type="submit" class="btn btn-dark w-100" id="btnSavePassword">บันทึกรหัสผ่านใหม่</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
