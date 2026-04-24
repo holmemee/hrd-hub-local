@@ -6,7 +6,8 @@ const app = express();
 const PORT = 3000;
 
 app.use(cors()); 
-app.use(express.json()); 
+app.use(express.json({ limit: '50mb' })); // ขยายท่อรับข้อมูลเป็น 50MB (สำหรับรูปภาพ)
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static('public'));
 
 // เชื่อมต่อฐานข้อมูล
@@ -153,6 +154,92 @@ app.post('/api/upload-profile-pic', (req, res) => {
     db.run(sql, [base64Image, empId], function(err) {
         if (err) return res.status(500).json({ success: false, message: err.message });
         res.json({ success: true, message: "เปลี่ยนรูปโปรไฟล์สำเร็จ!" });
+    });
+});
+
+// ==========================================
+// 🚀 API สำหรับหน้า Profile (บันทึก/แก้ไขข้อมูล)
+// ==========================================
+
+// --- 7. API อัปเดตข้อมูลส่วนตัว (Edit Profile) ---
+app.post('/api/update-profile', (req, res) => {
+    const { empId, fullName, shortDept, fullDept, level, fullPosition } = req.body;
+    const sql = "UPDATE Users SET FullName = ?, ShortDept = ?, FullDept = ?, Level = ?, FullPosition = ? WHERE EmpID = ?";
+    
+    db.run(sql, [fullName, shortDept, fullDept, level, fullPosition, empId], function(err) {
+        if (err) return res.status(500).json({ success: false, message: "ฐานข้อมูลขัดข้อง: " + err.message });
+        res.json({ success: true, message: "อัปเดตข้อมูลสำเร็จ!" });
+    });
+});
+
+// --- 8. API เปลี่ยนรหัสผ่าน (Change Password) ---
+app.post('/api/update-password', (req, res) => {
+    const { empId, newPassword } = req.body;
+    const sql = "UPDATE Users SET Password = ? WHERE EmpID = ?";
+    
+    db.run(sql, [newPassword, empId], function(err) {
+        if (err) return res.status(500).json({ success: false, message: err.message });
+        res.json({ success: true, message: "เปลี่ยนรหัสผ่านเรียบร้อยแล้ว!" });
+    });
+});
+
+// --- 9. API อัปโหลดรูปโปรไฟล์ (Upload Profile Pic) ---
+app.post('/api/upload-profile-pic', (req, res) => {
+    const { empId, base64Image } = req.body;
+    const sql = "UPDATE Users SET ProfilePic = ? WHERE EmpID = ?";
+    
+    db.run(sql, [base64Image, empId], function(err) {
+        if (err) return res.status(500).json({ success: false, message: err.message });
+        res.json({ success: true, message: "เปลี่ยนรูปโปรไฟล์สำเร็จ!" });
+    });
+});
+
+// --- 10. API ค้นหาพนักงาน (Directory Lookup) ---
+app.get('/api/staff-search', (req, res) => {
+    const { keyword, dept } = req.query;
+    let sql = "SELECT * FROM Users WHERE (FullName LIKE ? OR EmpID LIKE ?)";
+    let params = [`%${keyword}%`, `%${keyword}%` || '%%'];
+
+    if (dept) {
+        sql += " AND FullDept = ?";
+        params.push(dept);
+    }
+
+    db.all(sql, params, (err, rows) => {
+        if (err) return res.status(500).json({ success: false, message: err.message });
+        res.json({ success: true, data: rows });
+    });
+});
+
+// --- 11. API ติดตามสถานะงาน (Task Tracking) ---
+// ตัวนี้จะไปนับว่าแต่ละแผนก ทำงานสำเร็จ (Green), กำลังทำ (Orange), หรือยังไม่เริ่ม (Red)
+app.get('/api/task-tracking-stats', (req, res) => {
+    const sql = `
+        SELECT 
+            u.FullDept,
+            COUNT(CASE WHEN ta.OverallStatus = 'Completed' THEN 1 END) as completed,
+            COUNT(CASE WHEN ta.OverallStatus = 'In Progress' THEN 1 END) as inProgress,
+            COUNT(CASE WHEN ta.OverallStatus IS NULL OR ta.OverallStatus = 'Not Started' THEN 1 END) as pending
+        FROM Users u
+        LEFT JOIN Task_Assignments ta ON u.EmpID = ta.EmpID
+        GROUP BY u.FullDept
+    `;
+    db.all(sql, [], (err, rows) => {
+        if (err) return res.status(500).json({ success: false, message: err.message });
+        res.json({ success: true, data: rows });
+    });
+});
+
+
+// --- 12. API ดึงประวัติผลงานรายบุคคล (Staff Achievements) ---
+app.get('/api/staff-achievements/:empId', (req, res) => {
+    const empId = req.params.empId;
+    // ดึงผลงานของพนักงานคนนี้ เรียงจากวันที่ล่าสุดไปเก่าสุด
+    const sql = "SELECT * FROM Achievements WHERE Emp_ID = ? ORDER BY Date DESC";
+    
+    db.all(sql, [empId], (err, rows) => {
+        if (err) return res.status(500).json({ success: false, message: err.message });
+        res.json({ success: true, data: rows });
     });
 });
 
