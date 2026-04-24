@@ -8,6 +8,29 @@ const app = express();
 const PORT = 3000;
 
 // ==========================================
+// 🗂️ เครื่องมือจัดการโฟลเดอร์อัปโหลดอัตโนมัติ
+// ==========================================
+function getUploadPaths(category, subFolder, fileName) {
+    // 1. สร้างเส้นทางโฟลเดอร์ เช่น uploads/profiles/261478
+    // ใช้ string ว่าง '' ถ้าไม่มี subFolder
+    const relativeDir = path.join('uploads', category, String(subFolder || '')); 
+    const absoluteDir = path.join(__dirname, 'public', relativeDir);
+
+    // 2. ถ้าโฟลเดอร์นี้ยังไม่มี ให้สร้างขึ้นมาใหม่ทันที (รวมถึงโฟลเดอร์แม่ด้วย)
+    if (!fs.existsSync(absoluteDir)) {
+        fs.mkdirSync(absoluteDir, { recursive: true });
+    }
+
+    // 3. สร้าง URL สำหรับให้หน้าเว็บเรียกใช้ (แปลง \ เป็น / เผื่อรันบน Windows)
+    const fileUrl = `/${relativeDir}/${fileName}`.replace(/\\/g, '/');
+    
+    // 4. เส้นทางจริงบนฮาร์ดดิสก์
+    const absolutePath = path.join(absoluteDir, fileName);
+
+    return { absolutePath, fileUrl };
+}
+
+// ==========================================
 // ⚙️ Middleware Setup
 // ==========================================
 app.use(cors()); 
@@ -122,7 +145,7 @@ app.post('/api/update-password', (req, res) => {
     });
 });
 
-// --- API อัปโหลดรูปโปรไฟล์ (เวอร์ชันล็อคพิกัดสัมบูรณ์) ---
+// --- API อัปโหลดรูปโปรไฟล์ (เวอร์ชันแยกโฟลเดอร์อัจฉริยะ) ---
 app.post('/api/upload-profile-pic', (req, res) => {
     console.log("=========================================");
     console.log("📥 เริ่มกระบวนการอัปโหลดรูปภาพ...");
@@ -130,20 +153,12 @@ app.post('/api/upload-profile-pic', (req, res) => {
     const { empId, base64Image } = req.body;
 
     if (!base64Image) {
-        console.log("❌ ไม่มีข้อมูลรูปภาพส่งมา");
         return res.status(400).json({ success: false, message: "ไม่มีข้อมูลรูปภาพส่งมา" });
     }
 
     try {
-        // 🔴 ล็อคพิกัดที่ 4: มั่นใจ 100% ว่าเซฟลงในโปรเจกต์นี้เท่านั้น
-        const currentUploadDir = path.join(__dirname, 'public', 'uploads');
-        if (!fs.existsSync(currentUploadDir)) {
-            fs.mkdirSync(currentUploadDir, { recursive: true });
-        }
-
         const matches = base64Image.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
         if (!matches || matches.length !== 3) {
-             console.log("❌ ข้อมูลที่ส่งมาไม่ใช่ Base64 ที่อ่านได้");
              return res.status(400).json({ success: false, message: "ข้อมูลรูปภาพผิดรูปแบบ" });
         }
 
@@ -152,30 +167,32 @@ app.post('/api/upload-profile-pic', (req, res) => {
         let extension = mimeType.split('/')[1] || 'jpg';
         if (extension === 'jpeg') extension = 'jpg';
 
-        const fileName = `profile_${empId}_${Date.now()}.${extension}`;
-        const filePath = path.join(currentUploadDir, fileName); // เซฟตรงนี้แน่นอน!
-        const fileUrl = `/uploads/${fileName}`;
+        // 🌟 เรียกใช้เครื่องจักรแยกไฟล์ 🌟
+        // บอกมันว่า: หมวดหมู่ 'profiles', โฟลเดอร์ย่อยคือ 'รหัสพนักงาน'
+        const fileName = `pic_${Date.now()}.${extension}`;
+        const paths = getUploadPaths('profiles', empId, fileName);
 
-        console.log(`💾 พยายามบันทึกไฟล์ไปที่: ${filePath}`);
+        console.log(`💾 กำลังบันทึกไฟล์ไปที่: ${paths.absolutePath}`);
 
-        fs.writeFile(filePath, imageData, (err) => {
+        fs.writeFile(paths.absolutePath, imageData, (err) => {
             if (err) {
-                console.error("❌ คอมพิวเตอร์ไม่ยอมให้เขียนไฟล์!", err);
+                console.error("❌ เขียนไฟล์ไม่สำเร็จ:", err);
                 return res.status(500).json({ success: false, message: `เขียนไฟล์ไม่สำเร็จ: ${err.message}` });
             }
 
-            console.log(`✅ เขียนไฟล์สำเร็จ! รูปเข้าไปอยู่ในโฟลเดอร์ uploads แล้ว`);
+            console.log(`✅ เขียนไฟล์สำเร็จ! เข้าโฟลเดอร์ profiles/${empId} แล้ว`);
 
+            // อัปเดต Database ด้วย URL ใหม่
             const sql = "UPDATE Users SET ProfilePic = ? WHERE EmpID = ?";
-            db.run(sql, [fileUrl, empId], function(dbErr) {
+            db.run(sql, [paths.fileUrl, empId], function(dbErr) {
                 if (dbErr) {
                     console.error("❌ อัปเดต Database ไม่สำเร็จ!", dbErr);
-                    return res.status(500).json({ success: false, message: `อัปเดต DB ไม่สำเร็จ: ${dbErr.message}` });
+                    return res.status(500).json({ success: false, message: "อัปเดต DB ไม่สำเร็จ" });
                 }
                 
-                console.log(`🎉 อัปโหลดสมบูรณ์! URL: ${fileUrl}`);
+                console.log(`🎉 อัปโหลดสมบูรณ์! URL: ${paths.fileUrl}`);
                 console.log("=========================================");
-                res.json({ success: true, message: "อัปโหลดรูปสำเร็จ!", imageUrl: fileUrl });
+                res.json({ success: true, message: "อัปโหลดรูปสำเร็จ!", imageUrl: paths.fileUrl });
             });
         });
 
