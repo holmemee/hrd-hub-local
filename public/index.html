@@ -140,26 +140,7 @@
           </div>
         </div>
 
-        <div id="page-global-dash" class="app-page">
-          <h4 class="fw-bold text-purple mb-4"><i class="bi bi-globe-asia-australia me-2"></i> ภาพรวมองค์กร (Global Dashboard)</h4>
-          <div class="row g-4 mb-4">
-            <div class="col-md-4">
-              <div class="card border-0 shadow-sm gold-gradient h-100" style="border-radius: 20px;">
-                <div class="card-body text-center py-4"><h6 class="fw-bold mb-3 text-uppercase"><i class="bi bi-star-fill me-1"></i> Credit Score รวมทั้งเขต</h6><h1 class="display-4 fw-bold mb-0" id="gdTotalScore">0</h1></div>
-              </div>
-            </div>
-            <div class="col-md-4">
-              <div class="card border-0 shadow-sm purple-gradient h-100" style="border-radius: 20px;">
-                <div class="card-body text-center py-4"><h6 class="fw-bold mb-3 text-uppercase opacity-75"><i class="bi bi-people-fill me-1"></i> จำนวนบุคลากร</h6><h1 class="display-4 fw-bold mb-0" id="gdTotalStaff">0</h1></div>
-              </div>
-            </div>
-            <div class="col-md-4">
-              <div class="card border-0 shadow-sm glass-card h-100">
-                <div class="card-body text-center py-4 text-purple"><h6 class="fw-bold mb-3 text-uppercase"><i class="bi bi-graph-up-arrow me-1"></i> ค่าเฉลี่ยคะแนน / คน</h6><h1 class="display-4 fw-bold mb-0" id="gdAvgScore">0</h1></div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <div id="page-global-dash" class="app-page"></div>
 
       </div> </div> </div>
 
@@ -296,7 +277,7 @@
       document.getElementById('app-section').style.display = 'none';
     }
 
-    function switchPage(pageId) {
+    async function switchPage(pageId) {
       // ซ่อนทุกหน้า
       document.querySelectorAll('.app-page').forEach(p => p.classList.remove('active'));
       // ลบไฮไลท์เมนูด้านซ้าย
@@ -316,6 +297,20 @@
           activeLink.classList.remove('text-dark');
           activeLink.classList.add('active', 'text-white');
           activeLink.style.backgroundColor = '#4a148c';
+        }
+
+        // 🌟 ท่าไม้ตาย Lazy Load: ไปดูดไฟล์ HTML มาแปะถ้ากล่องมันว่างเปล่า
+        if (target.innerHTML.trim() === '') {
+          try {
+            const res = await fetch(`/pages/${pageId}.html`);
+            if (res.ok) {
+              target.innerHTML = await res.text();
+            } else {
+              console.warn(`ไม่พบไฟล์: /pages/${pageId}.html`);
+            }
+          } catch (error) {
+            console.error("โหลดหน้าเว็บล้มเหลว:", error);
+          }
         }
 
         // โหลดข้อมูลตามหน้าที่กด
@@ -530,6 +525,55 @@
       btn.innerHTML = 'บันทึกรหัสผ่านใหม่';
       btn.disabled = false;
     } 
+
+    // --- ฟังก์ชันค้นหาพนักงานรายบุคคล ---
+async function execStaffSearch() {
+  const keyword = document.getElementById('gdSearchKeyword').value;
+  const dept = document.getElementById('gdSearchDept').value;
+  const resultsContainer = document.getElementById('gdSearchResults');
+  
+  resultsContainer.innerHTML = '<div class="col-12 text-center py-5"><div class="spinner-border text-purple"></div></div>';
+
+  try {
+    const response = await fetch(`/api/staff-search?keyword=${keyword}&dept=${dept}`);
+    const result = await response.json();
+    
+    if (result.success && result.data.length > 0) {
+      let html = '';
+      result.data.forEach(user => {
+        html += `
+          <div class="col-md-4 mb-3">
+            <div class="card staff-card p-3 shadow-sm" onclick="showStaffPortfolio('${user.EmpID}')">
+              <div class="d-flex align-items-center">
+                <img src="${user.ProfilePic || 'https://via.placeholder.com/50'}" class="rounded-circle me-3" style="width:50px; height:50px; object-fit:cover;">
+                <div>
+                  <h6 class="mb-0 fw-bold">${user.FullName}</h6>
+                  <small class="text-muted">${user.ShortDept}</small>
+                </div>
+              </div>
+            </div>
+          </div>`;
+      });
+      resultsContainer.innerHTML = html;
+    } else {
+      resultsContainer.innerHTML = '<div class="col-12 text-center py-5 text-muted">ไม่พบข้อมูลพนักงานที่ระบุ</div>';
+    }
+  } catch (error) {
+    console.error("Search failed:", error);
+  }
+}
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  
+  <script src="/js/global-dash.js"></script>
+
+  <script>
+    let currentUser = null;
+    let allAnnouncementsData = [];
+    
+    // ... ฟังก์ชัน Login, switchPage ฯลฯ ปล่อยไว้ที่เดิม ...
+  </script>
+</body>
 
   </script>
 </body>
