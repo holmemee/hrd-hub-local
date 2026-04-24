@@ -18,20 +18,39 @@ async function loadUserProfile() {
 function uploadProfilePic(event) {
     const file = event.target.files[0];
     if(!file) return;
+
     const reader = new FileReader();
     reader.onload = async function(e) {
         const base64 = e.target.result;
-        const res = await fetch('/api/upload-profile-pic', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ empId: currentUser.EmpID, base64Image: base64 })
-        });
-        if((await res.json()).success) {
-            currentUser.ProfilePic = base64;
-            document.getElementById('profilePicBig').src = base64;
-            document.getElementById('navProfilePic').src = base64;
+        
+        // ทำให้รูปเบลอตอนกำลังโหลด
+        document.getElementById('profilePicBig').style.opacity = '0.5';
+
+        try {
+            const res = await fetch('/api/upload-profile-pic', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ empId: currentUser.EmpID, base64Image: base64 })
+            });
+            
+            const data = await res.json();
+            
+            if(data.success) {
+                // 🌟 ใช้ URL ไฟล์จริงๆ ที่ส่งกลับมาจาก Server
+                currentUser.ProfilePic = data.imageUrl;
+                document.getElementById('profilePicBig').src = data.imageUrl;
+                document.getElementById('navProfilePic').src = data.imageUrl;
+            } else {
+                alert(data.message);
+            }
+        } catch(err) {
+            alert('การเชื่อมต่อขัดข้อง');
         }
+        
+        // คืนค่าความชัดให้รูป
+        document.getElementById('profilePicBig').style.opacity = '1';
     };
+    
     reader.readAsDataURL(file);
 }
 
